@@ -1,6 +1,7 @@
 <?php
 require_once "web/autoload.php";
 require_once "includes/options.php";
+require_once "includes/option.php";
 /*
  * routing is provided via klein.php
  * see more at https://github.com/chriso/klein.php
@@ -16,16 +17,24 @@ require_once "includes/options.php";
 //
 /*************** GET ****************/
 //
-respond( 'GET', '[*:url]', function( $request, $response, $app ) {
+respond( '[*:url]', function( $request, $response, $app ) {
+	// create slug is from Plymouth State's functions
+	 $app->createSlug = function($str){
+		$find = array(
+			'/[ \/\\\+\=]/',
+			'/_+/',
+			'/[^a-zA-Z0-9\_\-]/'
+		);
+
+		$replace = array(
+			'-',
+			'_',
+			''
+		);
+
+		return strtolower(preg_replace($find,$replace,$str));
+	};//end createSlug
 	
-	$tmp = ($request->params('url'));
-	$url = $tmp['url'];
-	$app->tpl = new TDCSmarty;
-	$options = new options();	
-
-	$app->tpl->assign('base_url', "/~tlferm/switchboard/switchboard");
-	$app->tpl->assign('options', $options);
-
 	$app->clean = function($to_clean){
 		foreach($to_clean as $key1 => $temp){
 			foreach($temp as $key => $val){
@@ -36,73 +45,116 @@ respond( 'GET', '[*:url]', function( $request, $response, $app ) {
 		}
 		return $to_clean;
 	};
+	 
+	// little bit of a hack for a log in system
+		$wpid="";
+		foreach ($_COOKIE as $key => $val){
+			if (preg_match( "/wordpress_logged/i", $key)){
+				$temp = explode("|", $val);
+				$wpid = $temp[0];
+				break;
+			}
+		}	
+
+		$sql = "SELECT * FROM switchboard_admin WHERE wpid=? AND deleted IS NULL";
+		$args = array($wpid);
+		$result = $app->clean(TDC::db('rcameden')->GetAll($sql, $args));
+
+
+		if ($result[0]["wpid"]){
+			$app->admin = true;
+		}
+		else{
+			$app->admin = false;
+		}
+
+		$app->admin = true;
+	// end log in system	
+	
+	$tmp = ($request->params('url'));
+	$url = $tmp['url'];
+
+	$app->tpl = new TDCSmarty;
+	$app->options = new options();	
+
+	$app->tpl->assign('base_url', "/~tlferm/switchboard/switchboard");
+	$app->tpl->assign('options', $app->options);
+	$app->tpl->assign('admin', $app->admin);
+
 
 });
-
 
 respond( 'GET', '/?', function( $request, $response, $app ) {
 	$app->tpl->display('index.tpl');
 });
+
 respond( 'GET', '/admin/?', function( $request, $response, $app ) {
-
+	if ($app->admin){
+		$app->tpl->display('admin.tpl');
+	}
+	else{
+		$response->back();
+	}
 });
 
-respond( 'GET', '/logout/?', function( $request, $response, $app ) {
-	$response->redirect($request->uri());
-});
-
-
-respond( 'GET', '/view/[:piece_id]?', function( $request, $response, $app ) {
-	$hold = array();
+respond( 'GET', '/wpid/?', function( $request, $response, $app ) {
+	$wpid="";
 	foreach ($_COOKIE as $key => $val){
 		if (preg_match( "/wordpress_logged/i", $key)){
 			$temp = explode("|", $val);
 			$wpid = $temp[0];
 		}
-		$hold[$key] = $val;
 	}
-	if ($wpid == "p4radoxes"){
-
-		$piece_id = ($request->params('piece_id'));
-		$sql = "SELECT * FROM log_pieces WHERE piece_id=?";
-		$args = $piece_id;
-		$pieces = $app->clean(TDC::db('tlferm')->GetAll($sql, $args));
-		foreach($_COOKIE as $key => $yum){
-			unset($_COOKIE["$key"]);
-		}
-		foreach($pieces as $piece){
-			TDC::dbug($piece);
-		}
-	}
-	else{
-		die;
-	}
-
+	echo 'Your wpid is "' . $wpid . '"<br>' . "If it is blank that is because you aren't loged into the right place";
 });
-
 respond( 'GET', '/news?', function( $request, $response, $app ) {
 	$app->tpl->display('news.tpl');
 });
 //
 /*************** POST ****************/
 //
-respond( 'POST', '/?', function( $request, $response, $app ) {
-	$creds = TDC::db('t2')->GetAll("SELECT Id, User_Name, Password, Lawyer_Id, User_level FROM User WHERE Id=?", array($_POST['Id']));
-	if (!$creds){
-		$creds = TDC::db('t2')->GetAll("SELECT Id, User_Name, Password, Lawyer_Id, User_level FROM User WHERE User_Name=?", array($_POST['Id']));
-	}
-	if ($creds[0]['Password'] == $_POST['Password'] && $_POST['Id'] != null){
-		$_SESSION['logedIn'] = true;
-		$_SESSION['Id'] = $creds[0]['Id'];
-		$_SESSION['User_Name'] = $creds[0]['User_Name'];
-		$_SESSION['User_level'] = $creds[0]['User_level'];
-		$_SESSION['User_level'] = $creds[0]['User_level'];
-		$_SESSION['Lawyer_Id'] = $creds[0]['Lawyer_Id'];
-		$response->back();
-	}	
-	else{
-		$response->back();
-	}
+
+respond( 'POST', '/admin/add/?', function( $request, $response, $app ) {
+
+	$department = $_POST["department"];
+	$phone_number = $_POST["phone_number"];
+	$slug = $app->createSlug($department);
+	$sql = "SELECT MAX(id) as id FROM switchboard_options WHERE deleted IS NULL";
+	$result = $app->clean(TDC::db('rcameden')->GetAll($sql));
+	$id = $result[0]["id"] + 1;
+
+	$leading_letter = strtoupper(substr($department,0,1));
+
+	$args = array("id"=>$id,"department"=>$department,"phone_number"=>$phone_number,"department_slug"=>$slug,"leading_letter"=>$leading_letter);
+
+	$option = new option($args);
+
+	$option->save("insert");
+
+	$response->back();
+
+});
+
+respond( 'POST', '/admin/delete/?', function( $request, $response, $app ) {
+	$id = $request->data[0];
+
+	$option = option::get($id);
+
+	$option->delete();
+
+});
+respond( 'POST', '/admin/?', function( $request, $response, $app ) {
+	$id = $request->data[0];
+	$department = $request->data[1];
+	$phone_number = $request->data[2];
+	
+	$option = option::get($id);
+
+	$option->department = $department;
+	$option->phone_number = $phone_number;
+
+	$option->save();
+
 });
 
 $app_routes = array();

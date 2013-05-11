@@ -1,3 +1,5 @@
+
+<div class="row">
 	<h3>Help Desk News:</h3>
 	<hr>
 	<div class="span12">
@@ -116,4 +118,4 @@
 			</div>
 		</div>
 	</div>
-
+</div>
