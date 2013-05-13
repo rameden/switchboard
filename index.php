@@ -68,7 +68,6 @@ respond( '[*:url]', function( $request, $response, $app ) {
 			$app->admin = false;
 		}
 
-		$app->admin = true;
 	// end log in system	
 	
 	$tmp = ($request->params('url'));
@@ -128,9 +127,9 @@ respond( 'POST', '/admin/add/?', function( $request, $response, $app ) {
 	$args = array("id"=>$id,"department"=>$department,"phone_number"=>$phone_number,"department_slug"=>$slug,"leading_letter"=>$leading_letter);
 
 	$option = new option($args);
-
+	TDC::dbug($option);
 	$option->save("insert");
-
+die;
 	$response->back();
 
 });

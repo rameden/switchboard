@@ -19,7 +19,7 @@
 				$result = TDC::db('rcameden')->Execute($sql, $args);
 			}
 			else{
-				$sql = "INSERT INTO switchboard_options VALUES(?,?,?,?,?)";
+				$sql = "INSERT INTO switchboard_options (id,leading_letter,department,department_slug,phone_number) VALUES (?,?,?,?,?)";
 				$args = array($this->id, $this->leading_letter, $this->department, $this->department_slug, $this->phone_number);	
 				$result = TDC::db('rcameden')->Execute($sql, $args);
 
